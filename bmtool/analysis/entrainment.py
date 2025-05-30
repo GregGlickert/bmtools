@@ -48,7 +48,7 @@ def calculate_signal_signal_plv(
     signal1: np.ndarray,
     signal2: np.ndarray,
     fs: float,
-    freq_of_interest: float = None,
+    freq: float = None,
     filter_method: str = "wavelet",
     lowcut: float = None,
     highcut: float = None,
@@ -60,21 +60,21 @@ def calculate_signal_signal_plv(
     Parameters
     ----------
     signal1 : np.ndarray
-        First input signal (1D array)
+        First input signal (1D array).
     signal2 : np.ndarray
-        Second input signal (1D array, same length as signal1)
+        Second input signal (1D array, same length as signal1).
     fs : float
-        Sampling frequency in Hz
-    freq_of_interest : float, optional
-        Desired frequency for wavelet PLV calculation, required if filter_method='wavelet'
+        Sampling frequency in Hz.
+    freq : Optional[float], optional
+        Desired frequency for wavelet PLV calculation, required if filter_method='wavelet'. Default is None.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet')
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet').
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0).
 
     Returns
     -------
@@ -85,12 +85,12 @@ def calculate_signal_signal_plv(
         raise ValueError("Input signals must have the same length.")
 
     if filter_method == "wavelet":
-        if freq_of_interest is None:
-            raise ValueError("freq_of_interest must be provided for the wavelet method.")
+        if freq is None:
+            raise ValueError("freq must be provided for the wavelet method.")
 
         # Apply CWT to both signals
-        theta1 = wavelet_filter(x=signal1, freq=freq_of_interest, fs=fs, bandwidth=bandwidth)
-        theta2 = wavelet_filter(x=signal2, freq=freq_of_interest, fs=fs, bandwidth=bandwidth)
+        theta1 = wavelet_filter(x=signal1, freq=freq, fs=fs, bandwidth=bandwidth)
+        theta2 = wavelet_filter(x=signal2, freq=freq, fs=fs, bandwidth=bandwidth)
 
     elif filter_method == "butter":
         if lowcut is None or highcut is None:
@@ -132,7 +132,7 @@ def _get_spike_phases(
     spike_fs: float,
     lfp_fs: float,
     filter_method: str = "wavelet",
-    freq_of_interest: Optional[float] = None,
+    freq: Optional[float] = None,
     lowcut: Optional[float] = None,
     highcut: Optional[float] = None,
     bandwidth: float = 2.0,
@@ -144,25 +144,25 @@ def _get_spike_phases(
     Parameters
     ----------
     spike_times : np.ndarray
-        Array of spike times
+        Array of spike times.
     lfp_data : Union[np.ndarray, xr.DataArray]
         Local field potential time series data. Not required if filtered_lfp_phase is provided.
     spike_fs : float
-        Sampling frequency in Hz of the spike times
+        Sampling frequency in Hz of the spike times.
     lfp_fs : float
-        Sampling frequency in Hz of the LFP data
+        Sampling frequency in Hz of the LFP data.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet')
-    freq_of_interest : float, optional
-        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet').
+    freq : Optional[float], optional
+        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'. Default is None.
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
-    filtered_lfp_phase : np.ndarray, optional
-        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step.
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0).
+    filtered_lfp_phase : Optional[Union[np.ndarray, xr.DataArray]], optional
+        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step. Default is None.
 
     Returns
     -------
@@ -197,7 +197,7 @@ def _get_spike_phases(
         instantaneous_phase = get_lfp_phase(
             lfp_data=lfp_data,
             filter_method=filter_method,
-            freq_of_interest=freq_of_interest,
+            freq_of_interest=freq,
             lowcut=lowcut,
             highcut=highcut,
             bandwidth=bandwidth,
@@ -217,15 +217,15 @@ def _get_spike_phases(
 
 def calculate_spike_lfp_plv(
     spike_times: np.ndarray = None,
-    lfp_data=None,
+    lfp_data: Union[np.ndarray, xr.DataArray] = None,
     spike_fs: float = None,
     lfp_fs: float = None,
     filter_method: str = "butter",
-    freq_of_interest: float = None,
+    freq: float = None,
     lowcut: float = None,
     highcut: float = None,
     bandwidth: float = 2.0,
-    filtered_lfp_phase: np.ndarray = None,
+    filtered_lfp_phase: Optional[Union[np.ndarray, xr.DataArray]] = None,
 ) -> float:
     """
     Calculate spike-lfp unbiased phase locking value
@@ -233,25 +233,25 @@ def calculate_spike_lfp_plv(
     Parameters
     ----------
     spike_times : np.ndarray
-        Array of spike times
-    lfp_data : np.ndarray
-        Local field potential time series data. Not required if filtered_lfp_phase is provided.
-    spike_fs : float, optional
-        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates
+        Array of spike times.
+    lfp_data : Union[np.ndarray, xr.DataArray], optional
+        Local field potential time series data. Not required if filtered_lfp_phase is provided. Default is None.
+    spike_fs : Optional[float], optional
+        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates. Default is None.
     lfp_fs : float
-        Sampling frequency in Hz of the LFP data
+        Sampling frequency in Hz of the LFP data.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'butter')
-    freq_of_interest : float, optional
-        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'butter').
+    freq : Optional[float], optional
+        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'. Default is None.
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
-    filtered_lfp_phase : np.ndarray, optional
-        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step.
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0).
+    filtered_lfp_phase : Optional[Union[np.ndarray, xr.DataArray]], optional
+        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step. Default is None.
 
     Returns
     -------
@@ -265,7 +265,7 @@ def calculate_spike_lfp_plv(
         spike_fs=spike_fs,
         lfp_fs=lfp_fs,
         filter_method=filter_method,
-        freq_of_interest=freq_of_interest,
+        freq=freq,
         lowcut=lowcut,
         highcut=highcut,
         bandwidth=bandwidth,
@@ -330,16 +330,16 @@ def _ppc_gpu(spike_phases):
 
 def calculate_ppc(
     spike_times: np.ndarray = None,
-    lfp_data=None,
+    lfp_data: Union[np.ndarray, xr.DataArray] = None,
     spike_fs: float = None,
     lfp_fs: float = None,
     filter_method: str = "wavelet",
-    freq_of_interest: float = None,
+    freq: float = None,
     lowcut: float = None,
     highcut: float = None,
     bandwidth: float = 2.0,
     ppc_method: str = "numpy",
-    filtered_lfp_phase: np.ndarray = None,
+    filtered_lfp_phase: Optional[Union[np.ndarray, xr.DataArray]] = None,
 ) -> float:
     """
     Calculate Pairwise Phase Consistency (PPC) between spike times and LFP signal.
@@ -348,27 +348,27 @@ def calculate_ppc(
     Parameters
     ----------
     spike_times : np.ndarray
-        Array of spike times
-    lfp_data : np.ndarray
-        Local field potential time series data. Not required if filtered_lfp_phase is provided.
-    spike_fs : float, optional
-        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates
+        Array of spike times.
+    lfp_data : Union[np.ndarray, xr.DataArray], optional
+        Local field potential time series data. Not required if filtered_lfp_phase is provided. Default is None.
+    spike_fs : Optional[float], optional
+        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates. Default is None.
     lfp_fs : float
-        Sampling frequency in Hz of the LFP data
+        Sampling frequency in Hz of the LFP data.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet')
-    freq_of_interest : float, optional
-        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet').
+    freq : Optional[float], optional
+        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'. Default is None.
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0).
     ppc_method : str, optional
-        Algorithm to use for PPC calculation: 'numpy', 'numba', or 'gpu' (default: 'numpy')
-    filtered_lfp_phase : np.ndarray, optional
-        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step.
+        Algorithm to use for PPC calculation: 'numpy', 'numba', or 'gpu' (default: 'numpy').
+    filtered_lfp_phase : Optional[Union[np.ndarray, xr.DataArray]], optional
+        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step. Default is None.
 
     Returns
     -------
@@ -382,7 +382,7 @@ def calculate_ppc(
         spike_fs=spike_fs,
         lfp_fs=lfp_fs,
         filter_method=filter_method,
-        freq_of_interest=freq_of_interest,
+        freq=freq,
         lowcut=lowcut,
         highcut=highcut,
         bandwidth=bandwidth,
@@ -413,15 +413,15 @@ def calculate_ppc(
 
 def calculate_ppc2(
     spike_times: np.ndarray = None,
-    lfp_data=None,
+    lfp_data: Union[np.ndarray, xr.DataArray] = None,
     spike_fs: float = None,
     lfp_fs: float = None,
     filter_method: str = "wavelet",
-    freq_of_interest: float = None,
+    freq: float = None,
     lowcut: float = None,
     highcut: float = None,
     bandwidth: float = 2.0,
-    filtered_lfp_phase: np.ndarray = None,
+    filtered_lfp_phase: Optional[Union[np.ndarray, xr.DataArray]] = None,
 ) -> float:
     """
     # -----------------------------------------------------------------------------
@@ -436,25 +436,25 @@ def calculate_ppc2(
     Parameters
     ----------
     spike_times : np.ndarray
-        Array of spike times
-    lfp_data : np.ndarray
-        Local field potential time series data. Not required if filtered_lfp_phase is provided.
-    spike_fs : float, optional
-        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates
+        Array of spike times.
+    lfp_data : Union[np.ndarray, xr.DataArray], optional
+        Local field potential time series data. Not required if filtered_lfp_phase is provided. Default is None.
+    spike_fs : Optional[float], optional
+        Sampling frequency in Hz of the spike times, only needed if spike times and LFP have different sampling rates. Default is None.
     lfp_fs : float
-        Sampling frequency in Hz of the LFP data
+        Sampling frequency in Hz of the LFP data.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet')
-    freq_of_interest : float, optional
-        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet').
+    freq : Optional[float], optional
+        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'. Default is None.
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
-    filtered_lfp_phase : np.ndarray, optional
-        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step.
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0).
+    filtered_lfp_phase : Optional[Union[np.ndarray, xr.DataArray]], optional
+        Pre-computed instantaneous phase of the filtered LFP. If provided, the function will skip the filtering step. Default is None.
 
     Returns
     -------
@@ -468,7 +468,7 @@ def calculate_ppc2(
         spike_fs=spike_fs,
         lfp_fs=lfp_fs,
         filter_method=filter_method,
-        freq_of_interest=freq_of_interest,
+        freq=freq,
         lowcut=lowcut,
         highcut=highcut,
         bandwidth=bandwidth,
@@ -495,7 +495,7 @@ def calculate_ppc2(
 
 def calculate_entrainment_per_cell(
     spike_df: pd.DataFrame = None,
-    lfp_data: np.ndarray = None,
+    lfp_data: Union[np.ndarray, xr.DataArray] = None,
     filter_method: str = "wavelet",
     pop_names: List[str] = None,
     entrainment_method: str = "plv",
@@ -517,29 +517,29 @@ def calculate_entrainment_per_cell(
     Parameters
     ----------
     spike_df : pd.DataFrame
-        DataFrame containing spike data with columns 'pop_name', 'node_ids', and 'timestamps'
-    lfp_data : np.ndarray
-        Local field potential (LFP) time series data
+        DataFrame containing spike data with columns 'pop_name', 'node_ids', and 'timestamps'.
+    lfp_data : Union[np.ndarray, xr.DataArray], optional
+        Local field potential (LFP) time series data. Default is None.
     filter_method : str, optional
-        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet')
+        Method to use for filtering, either 'wavelet' or 'butter' (default: 'wavelet').
+    pop_names : List[str], optional
+        List of population names to analyze. Default is None.
     entrainment_method : str, optional
-        Method to use for entrainment calculation, either 'plv', 'ppc', or 'ppc2' (default: 'plv')
-    lowcut : float, optional
-        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
-    highcut : float, optional
-        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'
+        Method to use for entrainment calculation, either 'plv', 'ppc', or 'ppc2' (default: 'plv').
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for butterworth bandpass filter, required if filter_method='butter'. Default is None.
     spike_fs : float
-        Sampling frequency of the spike times in Hz
+        Sampling frequency of the spike times in Hz.
     lfp_fs : float
-        Sampling frequency of the LFP signal in Hz
+        Sampling frequency of the LFP signal in Hz.
     bandwidth : float, optional
-        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2.0)
-    ppc_method : str, optional
-        Algorithm to use for PPC calculation: 'numpy', 'numba', or 'gpu' (default: 'numpy')
-    pop_names : List[str]
-        List of population names to analyze
+        Bandwidth parameter for wavelet filter when method='wavelet' (default: 2).
     freqs : List[float]
-        List of frequencies (in Hz) at which to calculate entrainment
+        List of frequencies (in Hz) at which to calculate entrainment.
+    ppc_method : str, optional
+        Algorithm to use for PPC calculation: 'numpy', 'numba', or 'gpu' (default: 'numpy').
 
     Returns
     -------
@@ -556,17 +556,17 @@ def calculate_entrainment_per_cell(
     """
     # pre filter lfp to speed up calculate of entrainment
     filtered_lfp_phases = {}
-    for freq in range(len(freqs)):
+    for freq_val in freqs:  # Iterate over actual frequency values
         phase = get_lfp_phase(
             lfp_data=lfp_data,
-            freq_of_interest=freqs[freq],
+            freq_of_interest=freq_val,  # Use freq_val here
             fs=lfp_fs,
             filter_method=filter_method,
             lowcut=lowcut,
             highcut=highcut,
             bandwidth=bandwidth,
         )
-        filtered_lfp_phases[freqs[freq]] = phase
+        filtered_lfp_phases[freq_val] = phase  # Use freq_val as key
 
     entrainment_dict = {}
     for pop in pop_names:
@@ -584,47 +584,47 @@ def calculate_entrainment_per_cell(
                 continue
 
             entrainment_dict[pop][node] = {}
-            for freq in freqs:
+            for freq_val in freqs:  # Iterate over actual frequency values
                 # Calculate entrainment based on the selected method using the pre-filtered phases
                 if entrainment_method == "plv":
-                    entrainment_dict[pop][node][freq] = calculate_spike_lfp_plv(
+                    entrainment_dict[pop][node][freq_val] = calculate_spike_lfp_plv(
                         node_spikes["timestamps"].values,
                         lfp_data,
                         spike_fs=spike_fs,
                         lfp_fs=lfp_fs,
-                        freq_of_interest=freq,
+                        freq=freq_val,  # Pass freq_val to freq parameter
                         bandwidth=bandwidth,
                         lowcut=lowcut,
                         highcut=highcut,
                         filter_method=filter_method,
-                        filtered_lfp_phase=filtered_lfp_phases[freq],
+                        filtered_lfp_phase=filtered_lfp_phases[freq_val],
                     )
                 elif entrainment_method == "ppc2":
-                    entrainment_dict[pop][node][freq] = calculate_ppc2(
+                    entrainment_dict[pop][node][freq_val] = calculate_ppc2(
                         node_spikes["timestamps"].values,
                         lfp_data,
                         spike_fs=spike_fs,
                         lfp_fs=lfp_fs,
-                        freq_of_interest=freq,
+                        freq=freq_val,  # Pass freq_val to freq parameter
                         bandwidth=bandwidth,
                         lowcut=lowcut,
                         highcut=highcut,
                         filter_method=filter_method,
-                        filtered_lfp_phase=filtered_lfp_phases[freq],
+                        filtered_lfp_phase=filtered_lfp_phases[freq_val],
                     )
                 elif entrainment_method == "ppc":
-                    entrainment_dict[pop][node][freq] = calculate_ppc(
+                    entrainment_dict[pop][node][freq_val] = calculate_ppc(
                         node_spikes["timestamps"].values,
                         lfp_data,
                         spike_fs=spike_fs,
                         lfp_fs=lfp_fs,
-                        freq_of_interest=freq,
+                        freq=freq_val,  # Pass freq_val to freq parameter
                         bandwidth=bandwidth,
                         lowcut=lowcut,
                         highcut=highcut,
                         filter_method=filter_method,
                         ppc_method=ppc_method,
-                        filtered_lfp_phase=filtered_lfp_phases[freq],
+                        filtered_lfp_phase=filtered_lfp_phases[freq_val],
                     )
 
         print(
@@ -636,41 +636,52 @@ def calculate_entrainment_per_cell(
 
 def get_spikes_in_cycle(
     spike_df,
-    lfp_data,
-    spike_fs=1000,
-    lfp_fs=400,
-    filter_method="butter",
-    lowcut=None,
-    highcut=None,
-    bandwidth=2.0,
-    freq_of_interest=None,
+    lfp_data: Union[np.ndarray, xr.DataArray],
+    spike_fs: float = 1000,
+    lfp_fs: float = 400,
+    filter_method: str = "butter",
+    lowcut: Optional[float] = None,
+    highcut: Optional[float] = None,
+    bandwidth: float = 2.0,
+    freq: Optional[float] = None,
 ):
     """
     Analyze spike timing relative to oscillation phases.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     spike_df : pd.DataFrame
-    lfp_data : np.array
-        Raw LFP signal
-    fs : float
-        Sampling frequency of LFP in Hz
-    gamma_band : tuple
-        Lower and upper bounds of gamma frequency band in Hz
+        DataFrame containing spike data with 'pop_name' and 'timestamps' columns.
+    lfp_data : Union[np.ndarray, xr.DataArray]
+        Raw LFP signal.
+    spike_fs : float, optional
+        Sampling frequency of spike times in Hz, by default 1000.
+    lfp_fs : float, optional
+        Sampling frequency of LFP signal in Hz, by default 400.
+    filter_method : str, optional
+        Method to use for filtering, either 'butter' or 'wavelet', by default "butter".
+    lowcut : Optional[float], optional
+        Lower frequency bound (Hz) for Butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    highcut : Optional[float], optional
+        Upper frequency bound (Hz) for Butterworth bandpass filter, required if filter_method='butter'. Default is None.
+    bandwidth : float, optional
+        Bandwidth parameter for wavelet filter when method='wavelet', by default 2.0.
+    freq : Optional[float], optional
+        Desired frequency for wavelet phase extraction, required if filter_method='wavelet'. Default is None.
 
-    Returns:
-    --------
-    phase_data : dict
-        Dictionary containing phase values for each spike and neuron population
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dictionary containing phase values for each spike, keyed by neuron population.
     """
     phase = get_lfp_phase(
         lfp_data=lfp_data,
-        fs=lfp_fs,
+        fs=lfp_fs, # Use lfp_fs as the sampling frequency for LFP
         filter_method=filter_method,
         lowcut=lowcut,
         highcut=highcut,
         bandwidth=bandwidth,
-        freq_of_interest=freq_of_interest,
+        freq_of_interest=freq, # Pass 'freq' to 'freq_of_interest' as expected by get_lfp_phase
     )
 
     # Get unique neuron populations

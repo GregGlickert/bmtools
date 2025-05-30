@@ -1,5 +1,7 @@
 # Network Connections Plotting API
 
+This module provides a suite of functions for visualizing network connectivity, connection properties, and spatial arrangements of cells from BMTK simulations.
+
 ::: bmtool.bmplot.connections.is_notebook
     options:
       show_root_heading: true
@@ -56,6 +58,26 @@
       heading_level: 3
 
 ::: bmtool.bmplot.connections.plot_synapse_location_histograms
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: bmtool.bmplot.connections.plot_connection_info
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: bmtool.bmplot.connections.connector_percent_matrix
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: bmtool.bmplot.connections.plot_3d_positions
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: bmtool.bmplot.connections.plot_3d_cell_rotation
     options:
       show_root_heading: true
       heading_level: 3

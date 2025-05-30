@@ -15,45 +15,61 @@ def raster(
     spikes_df: Optional[pd.DataFrame] = None,
     config: Optional[str] = None,
     network_name: Optional[str] = None,
-    groupby: Optional[str] = "pop_name",
+    groupby: Optional[str] = "pop_name", # Assuming groupby refers to a single column name here
     ax: Optional[Axes] = None,
     tstart: Optional[float] = None,
     tstop: Optional[float] = None,
-    color_map: Optional[Dict[str, str]] = None,
-    dot_size: Optional[float] = 0.3,
+    color_map: Optional[Dict[str, Any]] = None, # Color can be many things (hex, rgb tuple, name)
+    dot_size: float = 0.3, # Made non-optional as it has a default
 ) -> Axes:
     """
-    Plots a raster plot of neural spikes, with different colors for each population.
+    Plots a raster plot of neural spikes, with different colors for each population group.
 
-    Parameters:
+    Parameters
     ----------
     spikes_df : pd.DataFrame, optional
-        DataFrame containing spike data with columns 'timestamps', 'node_ids', and optional 'pop_name'.
-    config : str, optional
-        Path to the configuration file used to load node data.
-    network_name : str, optional
-        Specific network name to select from the configuration; if not provided, uses the first network.
-    ax : matplotlib.axes.Axes, optional
-        Axes on which to plot the raster; if None, a new figure and axes are created.
-    tstart : float, optional
-        Start time for filtering spikes; only spikes with timestamps greater than `tstart` will be plotted.
-    tstop : float, optional
-        Stop time for filtering spikes; only spikes with timestamps less than `tstop` will be plotted.
-    color_map : dict, optional
-        Dictionary specifying colors for each population. Keys should be population names, and values should be color values.
-    dot_size: float, optional
-        Size of the dot to display on the scatterplot
+        DataFrame containing spike data. Must include 'timestamps' and 'node_ids'.
+        If `config` is not provided, this DataFrame must also contain the column specified by `groupby`.
+        Default is None (though practically required if `config` not used for population info).
+    config : Optional[str], optional
+        Path to the BMTK simulation configuration file. If provided, node information
+        (including the `groupby` column) will be loaded and merged. Default is None.
+    network_name : Optional[str], optional
+        Name of the network within the config to use for loading node data.
+        If None and `config` is used, attempts to use the first network found. Default is None.
+    groupby : Optional[str], optional
+        Column name in `spikes_df` (or in node attributes loaded from `config`) to use for
+        grouping spikes by color (e.g., 'pop_name'). Default is "pop_name".
+    ax : Optional[plt.Axes], optional
+        Matplotlib Axes object to plot on. If None, a new figure and axes are created. Default is None.
+    tstart : Optional[float], optional
+        Start time (ms) for filtering spikes. Spikes before this time are excluded. Default is None.
+    tstop : Optional[float], optional
+        Stop time (ms) for filtering spikes. Spikes after this time are excluded. Default is None.
+    color_map : Optional[Dict[str, Any]], optional
+        Dictionary mapping group names (from `groupby` column) to matplotlib-compatible color specifications.
+        If None, a default colormap ('tab10') will be used. Default is None.
+    dot_size : float, optional
+        Size of the dots in the raster plot. Default is 0.3.
 
-    Returns:
+    Returns
     -------
-    matplotlib.axes.Axes
-        Axes with the raster plot.
+    plt.Axes
+        The Matplotlib Axes object containing the raster plot.
 
-    Notes:
+    Raises
+    ------
+    ValueError
+        If `groupby` column is not found or `color_map` is missing entries for existing groups.
+    KeyError
+        If specified `network_name` is not found in the configuration.
+        
+    Notes
     -----
-    - If `config` is provided, the function merges population names from the node data with `spikes_df`.
-    - Each unique population from groupby in `spikes_df` will be represented by a different color if `color_map` is not specified.
-    - If `color_map` is provided, it should contain colors for all unique `pop_name` values in `spikes_df`.
+    - If `config` is provided, it's used to fetch node attributes (like 'pop_name') and merge them
+      with the `spikes_df` based on 'node_ids'.
+    - Ensure the `groupby` column exists either in the initial `spikes_df` or in the node attributes
+      loaded via `config`.
     """
     # Initialize axes if none provided
     sns.set_style("whitegrid")
@@ -126,26 +142,34 @@ def plot_firing_rate_pop_stats(
     firing_stats: pd.DataFrame,
     groupby: Union[str, List[str]],
     ax: Optional[Axes] = None,
-    color_map: Optional[Dict[str, str]] = None,
+    color_map: Optional[Dict[str, Any]] = None, # Color can be many things
 ) -> Axes:
     """
-    Plots a bar graph of mean firing rates with error bars (standard deviation).
+    Plots a bar graph of mean firing rates with error bars representing standard deviation.
 
-    Parameters:
+    Parameters
     ----------
     firing_stats : pd.DataFrame
-        Dataframe containing 'firing_rate_mean' and 'firing_rate_std'.
-    groupby : str or list of str
-        Column(s) used for grouping.
-    ax : matplotlib.axes.Axes, optional
-        Axes on which to plot the bar chart; if None, a new figure and axes are created.
-    color_map : dict, optional
-        Dictionary specifying colors for each group. Keys should be group names, and values should be color values.
+        DataFrame containing pre-computed firing rate statistics. Must include
+        columns specified by `groupby`, 'firing_rate_mean', and 'firing_rate_std'.
+    groupby : Union[str, List[str]]
+        Column name(s) in `firing_stats` used to define the groups for bars.
+    ax : Optional[plt.Axes], optional
+        Matplotlib Axes object to plot on. If None, a new figure and axes are created. Default is None.
+    color_map : Optional[Dict[str, Any]], optional
+        Dictionary mapping group names (generated from `groupby` columns) to 
+        matplotlib-compatible color specifications. If None, a default colormap ('viridis')
+        will be used. Default is None.
 
-    Returns:
+    Returns
     -------
-    matplotlib.axes.Axes
-        Axes with the bar plot.
+    plt.Axes
+        The Matplotlib Axes object containing the bar plot.
+        
+    Raises
+    ------
+    ValueError
+        If `color_map` is provided but is missing entries for some groups.
     """
     # Ensure groupby is a list for consistent handling
     sns.set_style("whitegrid")
@@ -211,35 +235,44 @@ def plot_firing_rate_pop_stats(
 # uses df from bmtool.analysis.spikes compute_firing_rate_stats
 def plot_firing_rate_distribution(
     individual_stats: pd.DataFrame,
-    groupby: Union[str, list],
+    groupby: Union[str, List[str]],
     ax: Optional[Axes] = None,
-    color_map: Optional[Dict[str, str]] = None,
-    plot_type: Union[str, list] = "box",
+    color_map: Optional[Dict[str, Any]] = None, # Color can be many things
+    plot_type: Union[str, List[str]] = "box",
     swarm_alpha: float = 0.6,
 ) -> Axes:
     """
     Plots a distribution of individual firing rates using one or more plot types
     (box plot, violin plot, or swarm plot), overlaying them on top of each other.
 
-    Parameters:
+    Parameters
     ----------
     individual_stats : pd.DataFrame
-        Dataframe containing individual firing rates and corresponding group labels.
-    groupby : str or list of str
-        Column(s) used for grouping.
-    ax : matplotlib.axes.Axes, optional
-        Axes on which to plot the graph; if None, a new figure and axes are created.
-    color_map : dict, optional
-        Dictionary specifying colors for each group. Keys should be group names, and values should be color values.
-    plot_type : str or list of str, optional
-        List of plot types to generate. Options: "box", "violin", "swarm". Default is "box".
+        DataFrame containing individual firing rates. Must include 'firing_rate' column
+        and the column(s) specified by `groupby`.
+    groupby : Union[str, List[str]]
+        Column name(s) in `individual_stats` used to define groups for plotting.
+    ax : Optional[plt.Axes], optional
+        Matplotlib Axes object to plot on. If None, a new figure and axes are created. Default is None.
+    color_map : Optional[Dict[str, Any]], optional
+        Dictionary mapping group names (generated from `groupby` columns) to 
+        matplotlib-compatible color specifications. If None, a default colormap ('viridis')
+        will be used. Default is None.
+    plot_type : Union[str, List[str]], optional
+        A single plot type string or a list of plot type strings to generate.
+        Options: "box", "violin", "swarm". Default is "box".
     swarm_alpha : float, optional
-        Transparency of swarm plot points. Default is 0.6.
+        Transparency (alpha value) for swarm plot points. Default is 0.6.
 
-    Returns:
+    Returns
     -------
-    matplotlib.axes.Axes
-        Axes with the selected plot type(s) overlayed.
+    plt.Axes
+        The Matplotlib Axes object containing the overlaid distribution plot(s).
+        
+    Raises
+    ------
+    ValueError
+        If an invalid `plot_type` is specified or if `color_map` is missing entries.
     """
     sns.set_style("whitegrid")
     # Ensure groupby is a list for consistent handling

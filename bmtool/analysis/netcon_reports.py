@@ -1,25 +1,32 @@
 import h5py
 import numpy as np
+from typing import Dict, List # Add typing imports
+import pandas as pd # Add pandas import for DataFrame type hint
+
 import xarray as xr
 
 from ..util.util import load_nodes_from_config
 
 
-def load_synapse_report(h5_file_path, config_path, network):
+def load_synapse_report(h5_file_path: str, config_path: str, network: str) -> xr.Dataset:
     """
-    Load and process a synapse report from a bmtk simulation into an xarray.
+    Load and process a synapse report from a bmtk simulation into an xarray.Dataset.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     h5_file_path : str
-        Path to the h5 file containing the synapse report
+        Path to the HDF5 file containing the synapse report.
     config_path : str
-        Path to the simulation configuration file
+        Path to the simulation configuration file (e.g., config.json).
+    network : str
+        The name of the network within the report (e.g., 'v1', 'lgn').
 
-    Returns:
-    --------
-    xarray.Dataset
-        An xarray containing the synapse report data with proper population labeling
+    Returns
+    -------
+    xr.Dataset
+        An xarray Dataset containing the synapse report data with dimensions
+        ('time', 'synapse') and various coordinates for synapse properties
+        and population labeling.
     """
     # Load the h5 file
     with h5py.File(h5_file_path, "r") as file:
@@ -47,19 +54,21 @@ def load_synapse_report(h5_file_path, config_path, network):
         sec_x = mapping["element_pos"][:]
 
     # Load node information
-    nodes = load_nodes_from_config(config_path)
-    nodes = nodes[network]
+    nodes_df: pd.DataFrame = load_nodes_from_config(config_path) # type: ignore
+    # The load_nodes_from_config likely returns a dict of DataFrames, 
+    # so we select the one for the specified network.
+    network_nodes: pd.DataFrame = nodes_df[network] # type: ignore
 
     # Create a mapping from node IDs to population names
-    node_to_pop = dict(zip(nodes.index, nodes["pop_name"]))
+    node_to_pop: Dict[int, str] = dict(zip(network_nodes.index, network_nodes["pop_name"]))
 
     # Get the number of synapses
-    n_synapses = data.shape[1]
+    n_synapses: int = data.shape[1]
 
     # Create arrays to hold the source and target populations for each synapse
-    source_pops = []
-    target_pops = []
-    connection_labels = []
+    source_pops: List[str] = []
+    target_pops: List[str] = []
+    connection_labels: List[str] = []
 
     # Process each synapse
     for i in range(n_synapses):

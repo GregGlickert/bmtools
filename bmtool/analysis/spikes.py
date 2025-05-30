@@ -18,7 +18,7 @@ def load_spikes_to_df(
     spike_file: str,
     network_name: str,
     sort: bool = True,
-    config: str = None,
+    config_path: Optional[str] = None, # Renamed from config and made Optional
     groupby: Union[str, List[str]] = "pop_name",
 ) -> pd.DataFrame:
     """
@@ -27,26 +27,26 @@ def load_spikes_to_df(
     Parameters
     ----------
     spike_file : str
-        Path to the HDF5 file containing spike data
+        Path to the HDF5 file containing spike data.
     network_name : str
-        The name of the network within the HDF5 file from which to load spike data
+        The name of the network within the HDF5 file from which to load spike data.
     sort : bool, optional
-        Whether to sort the DataFrame by 'timestamps' (default: True)
-    config : str, optional
-        Path to configuration file to label the cell type of each spike (default: None)
+        Whether to sort the DataFrame by 'timestamps' (default is True).
+    config_path : Optional[str], optional
+        Path to configuration file to label the cell type of each spike (default is None).
     groupby : Union[str, List[str]], optional
-        The column(s) to group by (default: 'pop_name')
+        The column(s) to group by (default is 'pop_name').
 
     Returns
     -------
     pd.DataFrame
         A pandas DataFrame containing 'node_ids' and 'timestamps' columns from the spike data,
-        with additional columns if a config file is provided
+        with additional columns if a config_path file is provided.
 
     Examples
     --------
     >>> df = load_spikes_to_df("spikes.h5", "cortex")
-    >>> df = load_spikes_to_df("spikes.h5", "cortex", config="config.json", groupby=["pop_name", "model_type"])
+    >>> df = load_spikes_to_df("spikes.h5", "cortex", config_path="config.json", groupby=["pop_name", "model_type"])
     """
     with h5py.File(spike_file) as f:
         spikes_df = pd.DataFrame(
@@ -59,9 +59,9 @@ def load_spikes_to_df(
         if sort:
             spikes_df.sort_values(by="timestamps", inplace=True, ignore_index=True)
 
-        if config:
-            nodes = load_nodes_from_config(config)
-            nodes = nodes[network_name]
+        if config_path:
+            nodes = load_nodes_from_config(config_path)
+            nodes = nodes[network_name] # Assuming network_name is a key in the dict returned by load_nodes_from_config
 
             # Convert single string to a list for uniform handling
             if isinstance(groupby, str):
@@ -82,22 +82,31 @@ def load_spikes_to_df(
 def compute_firing_rate_stats(
     df: pd.DataFrame,
     groupby: Union[str, List[str]] = "pop_name",
-    start_time: float = None,
-    stop_time: float = None,
+    t_start: Optional[float] = None,      # Renamed from start_time
+    t_stop: Optional[float] = None,       # Renamed from stop_time
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Computes the firing rates of individual nodes and the mean and standard deviation of firing rates per group.
 
-    Args:
-        df (pd.DataFrame): Dataframe containing spike timestamps and node IDs.
-        groupby (str or list of str, optional): Column(s) to group by (e.g., 'pop_name' or ['pop_name', 'layer']).
-        start_time (float, optional): Start time for the analysis window. Defaults to the minimum timestamp in the data.
-        stop_time (float, optional): Stop time for the analysis window. Defaults to the maximum timestamp in the data.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing spike timestamps and node IDs.
+        Must include 'timestamps', 'node_ids', and columns specified in `groupby`.
+    groupby : Union[str, List[str]], optional
+        Column(s) to group by (e.g., 'pop_name' or ['pop_name', 'layer']). Default is 'pop_name'.
+    t_start : Optional[float], optional
+        Start time (ms) for the analysis window. Defaults to the minimum timestamp in the data.
+    t_stop : Optional[float], optional
+        Stop time (ms) for the analysis window. Defaults to the maximum timestamp in the data.
 
-    Returns:
-        Tuple[pd.DataFrame, pd.DataFrame]:
-            - The first DataFrame (`pop_stats`) contains the mean and standard deviation of firing rates per group.
-            - The second DataFrame (`individual_stats`) contains the firing rate of each individual node.
+    Returns
+    -------
+    Tuple[pd.DataFrame, pd.DataFrame]
+        - pop_stats : pd.DataFrame
+            Contains the mean and standard deviation of firing rates per group.
+        - individual_stats : pd.DataFrame
+            Contains the firing rate (Hz) of each individual node.
     """
 
     # Ensure groupby is a list
@@ -110,26 +119,29 @@ def compute_firing_rate_stats(
             raise ValueError(f"Column '{col}' not found in dataframe.")
 
     # Filter dataframe based on start/stop time
-    if start_time is not None:
-        df = df[df["timestamps"] >= start_time]
-    if stop_time is not None:
-        df = df[df["timestamps"] <= stop_time]
+    if t_start is not None:
+        df = df[df["timestamps"] >= t_start]
+    if t_stop is not None:
+        df = df[df["timestamps"] <= t_stop]
 
     # Compute total duration for firing rate calculation
-    if start_time is None:
-        min_time = df["timestamps"].min()
-    else:
-        min_time = start_time
+    min_time_val = df["timestamps"].min() if t_start is None else t_start
+    max_time_val = df["timestamps"].max() if t_stop is None else t_stop
 
-    if stop_time is None:
-        max_time = df["timestamps"].max()
-    else:
-        max_time = stop_time
+    duration = max_time_val - min_time_val  # Duration in ms
 
-    duration = max_time - min_time  # Avoid division by zero
-
-    if duration <= 0:
-        raise ValueError("Invalid time window: Stop time must be greater than start time.")
+    if duration <= 0: # Check after correct assignment
+        # If t_start and t_stop are the same, or filtered df is empty, duration might be zero or negative.
+        # Return empty DataFrames or raise error, as firing rate is undefined.
+        # For now, let's align with the original code's implicit behavior of erroring out later
+        # or returning NaNs/zeros if spike_counts is empty.
+        # A more robust solution might return empty DFs with correct columns.
+        # However, the original code would lead to division by zero if duration is 0.
+        # Let's ensure a ValueError is raised for non-positive duration.
+        raise ValueError(
+            "Time window duration must be positive. "
+            f"Calculated duration: {duration} ms from min_time_val: {min_time_val} and max_time_val: {max_time_val}."
+        )
 
     # Compute firing rate for each node
 
@@ -143,22 +155,22 @@ def compute_firing_rate_stats(
     )
 
     # Compute firing rate
-    spike_counts["firing_rate"] = spike_counts["spike_count"] / duration * 1000  # scale to Hz
-    indivdual_stats = spike_counts
+    spike_counts["firing_rate"] = spike_counts["spike_count"] / (duration / 1000.0)  # scale to Hz (duration to seconds)
+    individual_stats = spike_counts # Corrected typo
 
     # Compute mean and standard deviation per group
-    pop_stats = spike_counts.groupby(groupby)["firing_rate"].agg(["mean", "std"]).reset_index()
+    pop_stats = individual_stats.groupby(groupby)["firing_rate"].agg(["mean", "std"]).reset_index()
 
     # Rename columns
     pop_stats.rename(columns={"mean": "firing_rate_mean", "std": "firing_rate_std"}, inplace=True)
 
-    return pop_stats, indivdual_stats
+    return pop_stats, individual_stats
 
 
 def _pop_spike_rate(
-    spike_times: Union[np.ndarray, list],
+    spike_times: Union[np.ndarray, List[float]], # Changed list to List[float]
     time: Optional[Tuple[float, float, float]] = None,
-    time_points: Optional[Union[np.ndarray, list]] = None,
+    time_points: Optional[Union[np.ndarray, List[float]]] = None, # Changed list to List[float]
     frequency: bool = False,
 ) -> np.ndarray:
     """
@@ -166,42 +178,77 @@ def _pop_spike_rate(
 
     Parameters
     ----------
-    spike_times : Union[np.ndarray, list]
-        Array or list of spike times in milliseconds
+    spike_times : Union[np.ndarray, List[float]]
+        Array or list of spike times in milliseconds.
     time : Optional[Tuple[float, float, float]], optional
-        Tuple specifying (start, stop, step) in milliseconds. Used to create evenly spaced time points
-        if `time_points` is not provided. Default is None.
-    time_points : Optional[Union[np.ndarray, list]], optional
-        Array or list of specific time points for binning. If provided, `time` is ignored. Default is None.
+        Tuple specifying (start_time, stop_time, step_ms) in milliseconds.
+        Used to create evenly spaced time points if `time_points` is not provided. Default is None.
+    time_points : Optional[Union[np.ndarray, List[float]]], optional
+        Array or list of specific time points (bin edges) for binning.
+        If provided, `time` is ignored. Default is None.
     frequency : bool, optional
         If True, returns spike frequency in Hz; otherwise, returns spike count. Default is False.
 
     Returns
     -------
     np.ndarray
-        Array of spike counts or frequencies, depending on the `frequency` flag.
+        Array of spike counts or frequencies, corresponding to the bins defined by `time_points` or `time`.
 
     Raises
     ------
     ValueError
-        If both `time` and `time_points` are None.
+        If both `time` and `time_points` are None, or if `dt` (time step) is zero or negative.
     """
     if time_points is None:
         if time is None:
             raise ValueError("Either `time` or `time_points` must be provided.")
-        time_points = np.arange(*time)
-        dt = time[2]
+        if time is None:
+            raise ValueError("Either `time` or `time_points` must be provided.")
+        time_points_np = np.arange(*time) # Ensure it's a numpy array for consistent processing
+        dt = time[2] # time step in ms
     else:
-        time_points = np.asarray(time_points).ravel()
-        dt = (time_points[-1] - time_points[0]) / (time_points.size - 1)
+        time_points_np = np.asarray(time_points).ravel()
+        if time_points_np.size < 2:
+            raise ValueError("`time_points` must contain at least two points to define a bin.")
+        # dt is calculated as the average difference between consecutive time points if not fixed by `time`
+        # However, for histogram, the bins are what matters.
+        # The dt for frequency calculation should represent the width of the bins.
+        # If time_points are bin edges, then dt is the difference. If they are bin centers, it's more complex.
+        # Assuming time_points are bin edges (as np.histogram expects bin edges).
+        # For frequency calculation, using the first bin width as representative if bins are uneven.
+        dt = time_points_np[1] - time_points_np[0] # More robust for frequency calculation if bins are uniform
 
-    bins = np.append(time_points, time_points[-1] + dt)
-    spike_rate, _ = np.histogram(np.asarray(spike_times), bins)
+    if dt <= 0:
+        raise ValueError("Time step `dt` must be positive.")
+
+    # Ensure bins cover the entire range specified by time_points
+    # If time_points are considered bin edges, np.histogram will use them directly.
+    # The original code `bins = np.append(time_points, time_points[-1] + dt)` assumes time_points are starts of bins.
+    # Let's clarify: np.histogram `bins` argument can be an int (number of bins) or array (bin edges).
+    # If `time_points` are the bin edges:
+    bins = time_points_np
+    
+    spike_counts, _ = np.histogram(np.asarray(spike_times), bins=bins)
 
     if frequency:
-        spike_rate = 1000 / dt * spike_rate
+        # dt for frequency should be the width of the bins.
+        # If bins are not uniform, this needs careful handling.
+        # Assuming uniform bin width based on the first two points of `time_points` or `time[2]`.
+        bin_widths = np.diff(bins) # Width of each bin
+        if not np.allclose(bin_widths, bin_widths[0]): # Check if all bin widths are the same
+             print(f"Warning: Bin widths are not uniform. Using mean bin width ({np.mean(bin_widths)} ms) for frequency calculation.")
+             # Using mean bin width for frequency calculation if bins are not uniform.
+             # This might not be ideal for all cases but is a reasonable compromise.
+             effective_dt_for_freq_calc = np.mean(bin_widths)
+        else:
+            effective_dt_for_freq_calc = bin_widths[0]
 
-    return spike_rate
+        if effective_dt_for_freq_calc <= 0:
+             raise ValueError("Bin width `dt` for frequency calculation must be positive.")
+        spike_rate_freq = spike_counts / (effective_dt_for_freq_calc / 1000.0) # Convert ms to s for Hz
+        return spike_rate_freq
+    
+    return spike_counts
 
 
 def get_population_spike_rate(
@@ -209,7 +256,7 @@ def get_population_spike_rate(
     fs: float = 400.0,
     t_start: float = 0,
     t_stop: Optional[float] = None,
-    config: Optional[str] = None,
+    config_path: Optional[str] = None, # Renamed from config
     network_name: Optional[str] = None,
     save: bool = False,
     save_path: Optional[str] = None,
@@ -230,12 +277,12 @@ def get_population_spike_rate(
         Start time (in milliseconds) for spike rate calculation (default: 0)
     t_stop : Optional[float], optional
         Stop time (in milliseconds) for spike rate calculation. If None, defaults to the maximum timestamp in the data
-    config : Optional[str], optional
+    config_path : Optional[str], optional
         Path to a configuration file containing node information, used to determine the correct number of nodes per population.
-        If None, node count is estimated from unique node spikes (default: None)
+        If None, node count is estimated from unique node spikes (default: None).
     network_name : Optional[str], optional
         Name of the network used in the configuration file, allowing selection of nodes for that network.
-        Required if `config` is provided (default: None)
+        Required if `config_path` is provided (default: None).
     save : bool, optional
         Whether to save the calculated population spike rate to a file (default: False)
     save_path : Optional[str], optional
@@ -263,7 +310,7 @@ def get_population_spike_rate(
 
     Notes
     -----
-    - If `config` is None, the function assumes all cells in each population have fired at least once;
+    - If `config_path` is None, the function assumes all cells in each population have fired at least once;
       otherwise, the node count may be inaccurate.
     - If normalization is enabled, each population's spike rate is scaled using Min-Max normalization.
     - Smoothing is applied using scipy.ndimage's filters based on the specified method.
@@ -277,21 +324,23 @@ def get_population_spike_rate(
             f"Invalid smooth_method: {smooth_method}. Choose from 'gaussian', 'boxcar', or 'exponential'."
         )
 
-    pop_spikes = {}
-    node_number = {}
+    pop_spikes: Dict[str, pd.DataFrame] = {}
+    node_number: Dict[str, int] = {}
 
-    if config is None:
+    if config_path is None:
         print(
             "Note: Node number is obtained by counting unique node spikes in the network.\nIf the network did not run for a sufficient duration, or not all cells fired,\nthen this count will not include all nodes so the firing rate will not be of the whole population!"
         )
         print(
-            "You can provide a config to calculate the correct amount of nodes! for a true population rate."
+            "You can provide a config_path to calculate the correct amount of nodes! for a true population rate."
         )
 
-    if config:
+    if config_path:
         if not network_name:
+            # This print statement is for user info, could be a warning log too.
             print(
-                "Grabbing first network; specify a network name to ensure correct node population is selected."
+                "Warning: `config_path` provided but `network_name` is None. "
+                "Attempting to use the first network found in the config, which may not be desired."
             )
 
     # Get t_stop if not provided
@@ -301,38 +350,65 @@ def get_population_spike_rate(
     # Get population names and prepare data
     populations = spike_data["pop_name"].unique()
     for pop_name in populations:
-        ps = spike_data[spike_data["pop_name"] == pop_name]
+        pop_specific_spikes_df = spike_data[spike_data["pop_name"] == pop_name]
 
-        if config:
-            nodes = load_nodes_from_config(config)
-            if network_name:
-                nodes = nodes[network_name]
+        if config_path:
+            # nodes_config is expected to be a dict of DataFrames (one per network)
+            nodes_config = load_nodes_from_config(config_path) # type: ignore
+            if network_name and network_name in nodes_config:
+                current_network_nodes: pd.DataFrame = nodes_config[network_name] # type: ignore
+            elif not network_name and nodes_config:
+                # Fallback to the first network if network_name is not specified
+                current_network_nodes = list(nodes_config.values())[0] # type: ignore
             else:
-                nodes = list(nodes.values())[0] if nodes else {}
-            nodes = nodes[nodes["pop_name"] == pop_name]
-            node_number[pop_name] = nodes.index.nunique()
+                # This case means config_path was given, but network_name might be wrong or config empty
+                raise ValueError(f"Network '{network_name}' not found in config or config is empty.")
 
+            pop_nodes_in_config = current_network_nodes[current_network_nodes["pop_name"] == pop_name]
+            node_number[pop_name] = pop_nodes_in_config.index.nunique()
         else:
-            node_number[pop_name] = ps["node_ids"].nunique()
+            node_number[pop_name] = pop_specific_spikes_df["node_ids"].nunique()
 
-        filtered_spikes = spike_data[
-            (spike_data["pop_name"] == pop_name)
-            & (spike_data["timestamps"] > t_start)
-            & (spike_data["timestamps"] < t_stop)
+        # Filter spikes for the current population and time window
+        filtered_spikes_df = pop_specific_spikes_df[
+            (pop_specific_spikes_df["timestamps"] >= t_start) & (pop_specific_spikes_df["timestamps"] <= t_stop)
         ]
-        pop_spikes[pop_name] = filtered_spikes
+        pop_spikes[pop_name] = filtered_spikes_df
 
-    # Calculate time points
-    time = np.arange(t_start, t_stop, 1000 / fs)  # Convert sampling frequency to time steps
+    # Define time bins for histogramming based on fs, t_start, t_stop
+    # np.arange might not include t_stop if (t_stop - t_start) is not a multiple of step
+    # Using np.linspace to ensure the number of points corresponds to fs over the duration
+    # The number of intervals will be fs * duration_seconds - 1, so num_points is fs * duration_seconds
+    duration_ms = t_stop - t_start
+    num_time_points = int(np.ceil(duration_ms / (1000.0 / fs))) + 1 # +1 to include both ends if using linspace for edges
+    time_bin_edges = np.linspace(t_start, t_stop, num_time_points)
+    # time_coords are usually bin centers or starts. For _pop_spike_rate, it expects bin edges.
+    # The output of _pop_spike_rate will have len(time_bin_edges) - 1 elements.
+    # So, the time coordinates for the output DataArray should be these bin centers or starts.
+    time_coords_for_output = time_bin_edges[:-1] # Or (time_bin_edges[:-1] + time_bin_edges[1:]) / 2 for centers
 
     # Calculate spike rates for each population
-    spike_rates = []
-    for p in populations:
-        raw_rate = _pop_spike_rate(pop_spikes[p]["timestamps"], (t_start, t_stop, 1000 / fs))
-        rate = fs / node_number[p] * raw_rate
-        spike_rates.append(rate)
+    spike_rates_list: List[np.ndarray] = []
+    for p_name in populations:
+        # _pop_spike_rate expects spike times and bin edges
+        # It returns counts, so frequency=False (default)
+        # Spike counts per bin
+        spike_counts_per_bin = _pop_spike_rate(
+            pop_spikes[p_name]["timestamps"].values, time_points=time_bin_edges, frequency=False
+        )
+        
+        # Rate = (spike_counts_per_bin / num_nodes_in_pop) / (bin_width_seconds)
+        # bin_width_ms = 1000.0 / fs
+        # rate = (spike_counts_per_bin / node_number[p_name]) / (bin_width_ms / 1000.0)
+        # Simplified: rate = spike_counts_per_bin * fs / node_number[p_name]
+        # This is average spikes per second per neuron in that population
+        if node_number[p_name] == 0: # Avoid division by zero
+            rate = np.zeros_like(spike_counts_per_bin, dtype=float)
+        else:
+            rate = spike_counts_per_bin * fs / node_number[p_name]
+        spike_rates_list.append(rate)
 
-    spike_rates_array = np.array(spike_rates).T  # Transpose to have time as first dimension
+    spike_rates_array = np.array(spike_rates_list).T  # Transpose to have time as first dimension
 
     # Calculate smoothed version for each population
     smoothed_rates = []
@@ -364,34 +440,37 @@ def get_population_spike_rate(
     combined_data = np.stack([spike_rates_array, smoothed_rates_array], axis=2)
 
     # Create DataArray with the additional 'type' dimension
-    spike_rate_array = xr.DataArray(
+    spike_rate_xarray = xr.DataArray( # Renamed for clarity
         combined_data,
-        coords={"time": time, "population": populations, "type": ["raw", "smoothed"]},
+        coords={"time": time_coords_for_output, "population": populations, "type": ["raw", "smoothed"]},
         dims=["time", "population", "type"],
         attrs={
-            "fs": fs,
+            "fs": fs, # Original sampling rate of spike data, or effective sampling rate of the bins
+            "description": "Population spike rate (Hz per neuron).",
             "normalized": False,
             "smooth_method": smooth_method,
-            "smooth_window": smooth_window,
+            "smooth_window_bins": smooth_window, # Clarify unit of smooth_window
         },
     )
 
     # Normalize if requested
     if normalize:
         # Apply normalization for each population and each type (raw/smoothed)
-        for pop_idx in range(len(populations)):
-            for type_idx, type_name in enumerate(["raw", "smoothed"]):
-                pop_data = spike_rate_array.sel(population=populations[pop_idx], type=type_name)
+        for pop_label in populations: # Iterate by label for clarity
+            for type_label in ["raw", "smoothed"]: # Iterate by label
+                pop_data = spike_rate_xarray.sel(population=pop_label, type=type_label)
                 min_val = pop_data.min(dim="time")
                 max_val = pop_data.max(dim="time")
 
-                # Handle case where min == max (constant signal)
-                if max_val != min_val:
-                    spike_rate_array.loc[:, populations[pop_idx], type_name] = (
-                        pop_data - min_val
-                    ) / (max_val - min_val)
+                # Handle case where min == max (constant signal or single point)
+                if max_val > min_val: # Ensure max_val is strictly greater than min_val
+                    spike_rate_xarray.loc[dict(population=pop_label, type=type_label)] = (pop_data - min_val) / (max_val - min_val)
+                elif max_val == min_val and min_val != 0 : # If constant non-zero, normalize to 0.5 or 1? Or leave as is?
+                    # Typically, if min=max, data is normalized to 0 or 0.5. Let's choose 0.
+                    spike_rate_xarray.loc[dict(population=pop_label, type=type_label)] = xr.zeros_like(pop_data)
 
-        spike_rate_array.attrs["normalized"] = True
+
+        spike_rate_xarray.attrs["normalized"] = True
 
     # Save if requested
     if save:
@@ -399,10 +478,10 @@ def get_population_spike_rate(
             raise ValueError("save_path must be provided if save is True.")
 
         os.makedirs(save_path, exist_ok=True)
-        save_file = os.path.join(save_path, "spike_rate.h5")
-        spike_rate_array.to_netcdf(save_file)
+        save_file = os.path.join(save_path, "population_spike_rate.nc") # Changed extension to .nc for netCDF
+        spike_rate_xarray.to_netcdf(save_file)
 
-    return spike_rate_array
+    return spike_rate_xarray
 
 
 def average_spike_rate_over_windows(
@@ -414,16 +493,16 @@ def average_spike_rate_over_windows(
     Parameters
     ----------
     spike_rate : xr.DataArray
-        The spike rate data array with dimensions (time, population, type)
-        where 'type' can be 'raw' or 'smoothed'
+        The spike rate data array, typically with dimensions (time, population, [type]),
+        where 'type' can be 'raw' or 'smoothed'.
     windows : List[Tuple[float, float]]
-        List of (start, end) times in milliseconds defining the windows to average over
+        List of (start_time_ms, end_time_ms) tuples defining the windows to average over.
 
     Returns
     -------
     xr.DataArray
-        Averaged spike rate with time normalized to start at 0,
-        preserving all original dimensions (time, population, type)
+        Averaged spike rate. The time dimension is normalized to start at 0 for each window's duration.
+        Other dimensions (like population, type) are preserved.
     """
     # Check if the DataArray has a 'type' dimension (compatible with new format)
     has_type_dim = "type" in spike_rate.dims
@@ -472,7 +551,10 @@ def average_spike_rate_over_windows(
 
 
 def compare_firing_over_times(
-    spike_df: pd.DataFrame, group_by: str, time_window_1: List[float], time_window_2: List[float]
+    spike_df: pd.DataFrame,
+    group_by: str,
+    time_window_1: Tuple[float, float], # Changed to Tuple
+    time_window_2: Tuple[float, float], # Changed to Tuple
 ) -> None:
     """
     Compares the firing rates of a population during two different time windows and performs
@@ -481,22 +563,22 @@ def compare_firing_over_times(
     Parameters
     ----------
     spike_df : pd.DataFrame
-        DataFrame containing spike data with columns for timestamps, node_ids, and grouping variable
+        DataFrame containing spike data with columns for 'timestamps', 'node_ids', and the `group_by` column.
     group_by : str
-        Column name to group spikes by (e.g., 'pop_name')
-    time_window_1 : List[float]
-        First time window as [start, stop] in milliseconds
-    time_window_2 : List[float]
-        Second time window as [start, stop] in milliseconds
+        Column name to group spikes by (e.g., 'pop_name').
+    time_window_1 : Tuple[float, float]
+        First time window as (start_ms, stop_ms).
+    time_window_2 : Tuple[float, float]
+        Second time window as (start_ms, stop_ms).
 
     Returns
     -------
     None
-        Results are printed to the console
+        Results are printed to the console.
 
     Notes
     -----
-    Uses Mann-Whitney U test (non-parametric) to compare firing rates between the two windows
+    Uses Mann-Whitney U test (non-parametric) to compare firing rates between the two windows.
     """
     # Filter spikes for the population of interest
     for pop_name in spike_df[group_by].unique():
@@ -552,24 +634,29 @@ def compare_firing_over_times(
 
 
 def find_bursting_cells(
-    df: pd.DataFrame, isi_threshold: float = 10, burst_count_threshold: int = 1
+    df: pd.DataFrame,
+    isi_threshold: float = 10.0, # Made float explicit
+    burst_count_threshold: int = 1,
 ) -> pd.DataFrame:
     """
-    Finds bursting cells in a population based on a time difference threshold.
+    Finds bursting cells in a population based on an Inter-Spike Interval (ISI) threshold.
+    Cells identified as bursters will have "_bursters" appended to their 'pop_name'.
 
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame containing spike data with columns for timestamps, node_ids, and pop_name
+        DataFrame containing spike data with at least 'timestamps', 'node_ids', and 'pop_name' columns.
     isi_threshold : float, optional
-        Time difference threshold in milliseconds to identify bursts
+        Time difference threshold in milliseconds (ms) to identify spikes belonging to a burst.
+        An ISI less than this threshold is considered part of a burst (default is 10.0 ms).
     burst_count_threshold : int, optional
-        Number of bursts required to identify a bursting cell
+        Minimum number of short ISIs (burst instances) required to classify a cell as a burster (default is 1).
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with bursting cells renamed in their pop_name column
+        A new DataFrame derived from the input, where the 'pop_name' of bursting cells
+        has been appended with "_bursters". Includes original spike data for these cells.
     """
     # Create a new DataFrame with the time differences
     diff_df = df.copy()
@@ -614,23 +701,20 @@ def find_highest_firing_cells(
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame containing spike data with at least the following columns:
-        - 'timestamps': Time of each spike event
-        - 'node_ids': Identifier for each neuron
-        - groupby (e.g., 'pop_name'): Population labels or grouping identifiers for neurons
-
+        DataFrame containing spike data with at least 'timestamps', 'node_ids',
+        and the column specified by `groupby` (e.g., 'pop_name').
     upper_quantile : float
-        The upper quantile threshold (between 0 and 1).
-        Cells with firing rates in the top (1 - upper_quantile) fraction are selected.
-        For example, upper_quantile=0.8 selects the top 20% of high-firing cells.
-
+        The upper quantile threshold (between 0.0 and 1.0).
+        Cells with firing rates in the top (1 - `upper_quantile`) fraction are selected.
+        For example, `upper_quantile=0.8` selects the top 20% of high-firing cells.
     groupby : str, optional
-        The column name used to group neurons by population. Default is 'pop_name'.
+        The column name used to group neurons by population (default is 'pop_name').
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame containing only the spikes from the high-firing cells across all groupbys.
+        A DataFrame containing only the spikes from the high-firing cells,
+        concatenated across all specified groups.
     """
     df_list = []
     for pop in df[groupby].unique():
